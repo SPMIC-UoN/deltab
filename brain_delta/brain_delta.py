@@ -7,7 +7,7 @@ https://doi.org/10.1016/j.neuroimage.2019.06.017
 1. Your vector of ages is Y (subjects 1)
 2. Your matrix of brain imaging measures is X (subjects features/ voxels)
 3. Subtract the means from Y and all columns in X
-4. Use SVD to replace X with its top 10–25% vertical eigenvectors
+4. Use SVD to replace X with its top 10 - 25% vertical eigenvectors
 5. Compute Y^2, demean it and orthogonalise it with respect to Y to give Y^2_o
 6. Create matrix Y2 = [Y Y^2_o] 
 7. The initial model is Y B1 = X β1 - δ1. Do:
@@ -24,11 +24,13 @@ class BrainDelta:
     """
     Class to predict brain age from features (e.g. IDPs, voxels)
     """
+    def __init__(self):
+        self._trained = False
 
-    def __init__(self, ages, features, ev_proportion=0.25):
+    def train(self, ages, features, ev_proportion=0.25):
         """
-        Train model using ground truth data
-        
+        Train model
+
         :param ages: Array of subject ages
         :param features: 2D array of [subjects, features]
         :param ev_proportion: Proportion of features to be retained in model
@@ -83,45 +85,65 @@ class BrainDelta:
 
         #    (b) Compute final brain age delta δ2q = δ1 - Y2 β2
         self.d2q = self.d1 - np.dot(self.y2, self.b2)
+        self._trained = True
 
-    def predict(self, ages, features, unbiased_model=True):
-        ages = np.atleast_1d(ages)
-        if ages.ndim != 1:
-            raise ValueError("Ages must be a 1D array")
+    def predict(self, age, features, unbiased_model=True, return_delta=False):
+        """
+        Predict brain age
+
+        :param age: Array of subject true ages
+        :param features: Array of [subjects, features]. Must be same features used in training
+        :param unbiased_model: Use the unbiased model (default True)
+        :param return_delta: Return the brain age delta (brain age - true age) rather than brain age
+        """
+        if not self._trained:
+            raise RuntimeError("Model is not trained")
+
+        age = np.atleast_1d(age)
+        if age.ndim != 1:
+            raise ValueError("Age must be a 1D array")
 
         features = np.atleast_2d(features)
         if features.ndim != 2:
             raise ValueError("Features must be 1D or 2D array")
-        if features.shape[0] != ages.shape[0]:
-            raise ValueError("Number of subjects must match in features and ages arrays")
+        if features.shape[0] != age.shape[0]:
+            raise ValueError("Number of subjects must match in features and age arrays")
         if features.shape[1] != self.x.shape[1]:
             raise ValueError("Number of features must match training features")
 
-        ages_demean = ages - self.y_mean
+        age_demean = age - self.y_mean
         features_demean = features - self.x_mean
 
         features_reduced = self.pca.transform(features_demean)
         age_predict = np.dot(features_reduced, self.b1) + self.y_mean
         
         if unbiased_model:
-            agesq_demean = np.square(ages_demean) - self.ysq_mean
+            agesq_demean = np.square(age_demean) - self.ysq_mean
             agesq_orth = agesq_demean - self.ysq_orth_offset
-            y2 = np.array([ages_demean, agesq_orth]).T
-            return age_predict - np.dot(y2, self.b2)
+            y2 = np.array([age_demean, agesq_orth]).T
+            age_predict -= np.dot(y2, self.b2)
+
+        if return_delta:
+            return age_predict - age
         else:
             return age_predict
 
 if __name__ == "__main__":
+    # How many subjects for each true age
     REPS_PER_AGE = 5
-    MIN_AGE = 30
-    MAX_AGE = 40
+
+    # Subject age range
+    MIN_AGE, MAX_AGE = 30, 40
     NUM_AGES = (MAX_AGE - MIN_AGE + 1)
     NUM_SUBJECTS = NUM_AGES * REPS_PER_AGE
+
+    # Number of features and weights
     FEATURE_WEIGHTS = [0.8, 0.1, 0.1]
     FEATURE_NOISE_STD = 0.5
     NUM_FEATURES = len(FEATURE_WEIGHTS)
 
-    BRAIN_AGE_DELTA = 2.5
+    # Difference in brain age between subjects of same true age
+    BRAIN_AGE_DELTA = 5
 
     # True ages
     Y = np.concatenate([np.repeat(age, REPS_PER_AGE) for age in range(MIN_AGE, MAX_AGE+1)])
@@ -129,8 +151,7 @@ if __name__ == "__main__":
     print(Y)
 
     # For all individuals of a given age we will assume brain age deltas varying linearly
-    # between -10 and +10
-    DELTA_TRUE = np.tile(np.linspace(-BRAIN_AGE_DELTA, BRAIN_AGE_DELTA, num=REPS_PER_AGE), NUM_AGES)
+    DELTA_TRUE = np.tile(np.linspace(-BRAIN_AGE_DELTA/2, BRAIN_AGE_DELTA/2, num=REPS_PER_AGE), NUM_AGES)
     BRAIN_AGE_TRUE = Y + DELTA_TRUE
     print("TRUE DELTA")
     print(DELTA_TRUE)
@@ -141,11 +162,12 @@ if __name__ == "__main__":
     X = np.zeros((NUM_SUBJECTS, NUM_FEATURES), dtype=float)
     for idx, weights in enumerate(FEATURE_WEIGHTS):
         X[:, idx] = BRAIN_AGE_TRUE * weights + np.random.normal(size=(NUM_SUBJECTS), scale=FEATURE_NOISE_STD)
-
     print("FEATURES")
     print(X)
 
-    b = BrainDelta(Y, X)
+    # Train the model
+    b = BrainDelta()
+    b.train(Y, X)
 
     print("BIASED DELTA")
     print(b.d1)
@@ -153,13 +175,11 @@ if __name__ == "__main__":
     print("UNBIASED DELTA")
     print(b.d2q)
 
+    # Check with some predictions
     delta = b.predict(Y, X)
-    print("PREDICTED AGES 1")
-    print(X)
+    print("PREDICTED AGES (unbiased)")
     print(delta)
 
-    X2 = X[:5]
-    delta = b.predict(Y[:5], X2)
-    print("PREDICTED AGES 2")
-    print(X2)
+    delta = b.predict(Y, X, unbiased_model=False)
+    print("PREDICTED AGES (biased)")
     print(delta)
