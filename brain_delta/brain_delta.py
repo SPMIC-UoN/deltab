@@ -27,14 +27,19 @@ class BrainDelta:
     def __init__(self):
         self._trained = False
 
-    def train(self, ages, features, ev_proportion=0.25):
+    def train(self, ages, features, ev_proportion=None, ev_num=None, include_quad=True):
         """
         Train model
 
         :param ages: Array of subject ages
         :param features: 2D array of [subjects, features]
-        :param ev_proportion: Proportion of features to be retained in model
+        :param ev_proportion: Optional proportion of features to be retained in model
+        :param ev_num: Optional number of features to be retained in model
+        :param include_quad: If True, include quadratic variation in age dependence
         """
+        if ev_proportion is not None and ev_num is not None:
+            raise ValueError("Only one of ev_proportion and ev_num may be specified")
+
         # 1. Your vector of ages is Y (subjects 1)
         self.y = np.squeeze(ages)
         if self.y.ndim != 1:
@@ -57,19 +62,26 @@ class BrainDelta:
         # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
         # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
         # order as we require
-        self.num_ev = max(1, int(ev_proportion * self.x_demean.shape[1]))
-        self.pca = PCA(n_components=self.num_ev)
+        if ev_num is not None:
+            self.ev_num = ev_num
+        elif ev_proportion is not None:
+            self.ev_num = max(1, int(ev_proportion * self.x_demean.shape[1]))
+        else:
+            self.ev_num = self.x_demean.shape[1]
+        self.pca = PCA(n_components=self.ev_num)
         self.x_reduced = self.pca.fit_transform(self.x_demean)
 
-        # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
-        self.ysq = np.square(self.y_demean)
-        self.ysq_mean = np.mean(self.ysq)
-        self.ysq_demean = self.ysq - self.ysq_mean
-        self.ysq_orth_offset = np.dot(self.y_demean/np.linalg.norm(self.y_demean), self.ysq_demean)
-        self.ysq_orth = self.ysq_demean - self.ysq_orth_offset
-                
-        # 6. Create matrix [Y2 Y2o]
-        self.y2 = np.array([self.y_demean, self.ysq_orth]).T
+        if include_quad:
+            # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
+            self.ysq = np.square(self.y_demean)
+            self.ysq_mean = np.mean(self.ysq)
+            self.ysq_demean = self.ysq - self.ysq_mean
+            self.ysq_orth_offset = np.dot(self.y_demean/np.linalg.norm(self.y_demean), self.ysq_demean)
+            self.ysq_orth = self.ysq_demean - self.ysq_orth_offset
+            # 6. Create matrix [Y2 Y2o]
+            self.y2 = np.array([self.y_demean, self.ysq_orth]).T
+        else:
+            self.y2 = self.y_demean[..., np.newaxis]
 
         # 7. The initial model is Y B1 = X β1 + δ1. Do:
         #    (a) Compute initial age prediction β1 = X^-1 Y giving Y_B1 = X β1 (where X^-1 is the pseudo-inverse of X). 
@@ -84,7 +96,8 @@ class BrainDelta:
         self.b2 = np.dot(np.linalg.pinv(self.y2), self.d1)
 
         #    (b) Compute final brain age delta δ2q = δ1 - Y2 β2
-        self.d2q = self.d1 - np.dot(self.y2, self.b2)
+        self.d2 = self.d1 - np.dot(self.y2, self.b2)
+        self.y_b2 = self.d2 + self.y_demean
         self._trained = True
 
     def predict(self, age, features, unbiased_model=True, return_delta=False):
@@ -173,7 +186,7 @@ if __name__ == "__main__":
     print(b.d1)
 
     print("UNBIASED DELTA")
-    print(b.d2q)
+    print(b.d2)
 
     # Check with some predictions
     delta = b.predict(Y, X)
