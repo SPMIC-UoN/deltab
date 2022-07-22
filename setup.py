@@ -95,8 +95,7 @@ kwargs = {
     },
     'entry_points' : {
         'console_scripts' : [
-        ],
-        'gui_scripts' : [
+            "brain_delta=brain_delta.main:main",
         ],
     },
     'classifiers' : [
