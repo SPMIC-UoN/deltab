@@ -20,6 +20,13 @@ https://doi.org/10.1016/j.neuroimage.2019.06.017
 import numpy as np
 from sklearn.decomposition import PCA
 
+class Model:
+    SIMPLE=1
+    UNBIASED=2
+    UNBIASED_QUADRATIC=3
+    ALTERNATE=4
+    ALTERNATE_QUADRATIC=5
+
 class BrainDelta:
     """
     Class to predict brain age from features (e.g. IDPs, voxels)
@@ -27,7 +34,7 @@ class BrainDelta:
     def __init__(self):
         self._trained = False
 
-    def train(self, ages, features, ev_proportion=None, ev_num=None, include_quad=True):
+    def train(self, ages, features, ev_proportion=None, ev_num=None):
         """
         Train model
 
@@ -71,17 +78,17 @@ class BrainDelta:
         self.pca = PCA(n_components=self.ev_num)
         self.x_reduced = self.pca.fit_transform(self.x_demean)
 
-        if include_quad:
-            # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
-            self.ysq = np.square(self.y_demean)
-            self.ysq_mean = np.mean(self.ysq)
-            self.ysq_demean = self.ysq - self.ysq_mean
-            self.ysq_orth_offset = np.dot(self.y_demean/np.linalg.norm(self.y_demean), self.ysq_demean)
-            self.ysq_orth = self.ysq_demean - self.ysq_orth_offset
-            # 6. Create matrix [Y2 Y2o]
-            self.y2 = np.array([self.y_demean, self.ysq_orth]).T
-        else:
-            self.y2 = self.y_demean[..., np.newaxis]
+        # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
+        self.ysq = np.square(self.y_demean)
+        self.ysq_mean = np.mean(self.ysq)
+        self.ysq_demean = self.ysq - self.ysq_mean
+        self.ysq_orth_offset = np.dot(self.y_demean/np.linalg.norm(self.y_demean), self.ysq_demean)
+        self.ysq_orth = self._orthogonalize(self.ysq_demean, self.y_demean)
+        # 6. Create matrix [Y2 Y2o]
+        self.y2sq = np.array([self.y_demean, self.ysq_orth]).T
+
+        # Equivalent to y2sq when not using quadratic correction
+        self.y2 = self.y_demean[..., np.newaxis]
 
         # 7. The initial model is Y B1 = X β1 + δ1. Do:
         #    (a) Compute initial age prediction β1 = X^-1 Y giving Y_B1 = X β1 (where X^-1 is the pseudo-inverse of X). 
@@ -94,13 +101,21 @@ class BrainDelta:
         # 8. The corrected model is δ1 = Y2 β2 + δ2q. Do: 
         #    (a) Compute corrected model fit β2 = Y2^-1 δ1 (correcting for bias in the initial fit and quadratic brain aging).
         self.b2 = np.dot(np.linalg.pinv(self.y2), self.d1)
+        self.b2sq = np.dot(np.linalg.pinv(self.y2sq), self.d1)
 
         #    (b) Compute final brain age delta δ2q = δ1 - Y2 β2
-        self.d2 = self.d1 - np.dot(self.y2, self.b2)
+        self.d2 = self.d1 - np.dot(self.y2sq, self.b2sq)
         self.y_b2 = self.d2 + self.y_demean
         self._trained = True
 
-    def predict(self, age, features, unbiased_model=True, return_delta=False):
+        # Alternative model
+        self.gamma = np.dot(np.linalg.pinv(self.y2), self.x_reduced)
+        self.gammasq = np.dot(np.linalg.pinv(self.y2sq), self.x_reduced)
+
+    def _orthogonalize(self, a, b):
+        return a - np.dot(b/np.linalg.norm(b), a)
+
+    def predict(self, age, features, model=Model.UNBIASED_QUADRATIC, return_delta=False):
         """
         Predict brain age
 
@@ -126,15 +141,32 @@ class BrainDelta:
 
         age_demean = age - self.y_mean
         features_demean = features - self.x_mean
-
         features_reduced = self.pca.transform(features_demean)
-        age_predict = np.dot(features_reduced, self.b1) + self.y_mean
-        
-        if unbiased_model:
-            agesq_demean = np.square(age_demean) - self.ysq_mean
-            agesq_orth = agesq_demean - self.ysq_orth_offset
+
+        if model in (Model.UNBIASED_QUADRATIC, Model.ALTERNATE_QUADRATIC):
+            agesq = np.square(age_demean)
+            agesq_demean = agesq - np.mean(agesq)
+            agesq_orth = self._orthogonalize(agesq_demean, age_demean)
             y2 = np.array([age_demean, agesq_orth]).T
-            age_predict -= np.dot(y2, self.b2)
+        else:
+            y2 = age_demean[:, np.newaxis]
+
+        if model == Model.ALTERNATE_QUADRATIC:
+            #print("dot2: ", y2.shape, self.gammasq.shape)
+            d = features_reduced - np.dot(y2, self.gammasq)
+            age_predict = np.squeeze(np.dot(d, np.linalg.pinv(self.gammasq[np.newaxis, 0, :])) + self.y_mean)
+            #print(age_predict.shape)
+        elif model == Model.ALTERNATE:
+            #print("dot: ", age_demean.shape, self.gamma.shape)
+            d = features_reduced - np.dot(age_demean[..., np.newaxis], self.gamma)
+            age_predict = np.squeeze(np.dot(d, np.linalg.pinv(self.gamma)) + self.y_mean)
+            #print(age_predict.shape)
+        else:
+            age_predict = np.dot(features_reduced, self.b1) + self.y_mean
+            if model == Model.UNBIASED_QUADRATIC:
+                age_predict -= np.dot(y2, self.b2sq)
+            elif model == Model.UNBIASED:
+                age_predict -= np.dot(y2, self.b2)
 
         if return_delta:
             return age_predict - age
