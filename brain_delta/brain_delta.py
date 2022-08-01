@@ -66,17 +66,21 @@ class BrainDelta:
         self.y_demean = self.y - self.y_mean
         self.x_demean = self.x - self.x_mean
 
-        # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
-        # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
-        # order as we require
-        if ev_num is not None:
-            self.ev_num = ev_num
-        elif ev_proportion is not None:
-            self.ev_num = max(1, int(ev_proportion * self.x_demean.shape[1]))
+        if ev_num is not None or ev_proportion is not None:
+            # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
+            # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
+            # order as we require
+            if ev_num is not None:
+                self.ev_num = ev_num
+            else:
+                self.ev_num = max(1, int(ev_proportion * self.x_demean.shape[1]))
+            self.pca = PCA(n_components=self.ev_num)
+            self.x_reduced = self.pca.fit_transform(self.x_demean)
         else:
+            # No reduction of features
             self.ev_num = self.x_demean.shape[1]
-        self.pca = PCA(n_components=self.ev_num)
-        self.x_reduced = self.pca.fit_transform(self.x_demean)
+            self.pca = None
+            self.x_reduced = self.x_demean
 
         # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
         self.ysq = np.square(self.y_demean)
@@ -141,7 +145,10 @@ class BrainDelta:
 
         age_demean = age - self.y_mean
         features_demean = features - self.x_mean
-        features_reduced = self.pca.transform(features_demean)
+        if self.pca is not None:
+            features_reduced = self.pca.transform(features_demean)
+        else:
+            features_reduced = features_demean
 
         if model in (Model.UNBIASED_QUADRATIC, Model.ALTERNATE_QUADRATIC):
             agesq = np.square(age_demean)
