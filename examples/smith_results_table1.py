@@ -60,16 +60,20 @@ def corr(X, *Y):
     """
     return np.corrcoef(np.stack([X] + list(Y), axis=1),rowvar=False)[0, 1:]
 
-def main():
+def main(sim=1):
     """
     Linear simulations (Table 1)
     """
-    NUM_SIMULATIONS = 10                                               # 20 in paper
-    NUM_SUBJECTS = 10000                                              # 20000 in paper
+    NUM_SIMULATIONS = 20                                               # 20 in paper
+    NUM_SUBJECTS = 20000                                                # 20000 in paper
     MEAN_Y, RANGE_Y, NOISE_Y_BASE = 60, 25, 0.5                       # 60, 25, 0.5 in MATLAB code
     NOISE_DELTA = 2                                                   # 2y in paper
-    NOISE_X, NUM_FEATURES_BASE, NUM_FEATURES_MIXED = 0.5, 100, 300   # SIM 1: 0.5, 100, 3000 in paper
-    PCA_NUM_EVALUES = [v for v in  [0, 1, 10, 50, 100, 1000, 2990] if v < NUM_FEATURES_MIXED]
+    if sim == 1:
+        NOISE_X, NUM_FEATURES_BASE, NUM_FEATURES_MIXED = 0.5, 100, 300    # SIM 1: 0.5, 100, 3000 in paper
+        PCA_NUM_EVALUES = [v for v in  [0, 1, 10, 50, 100, 1000, 2990] if v <= NUM_FEATURES_MIXED]
+    else:
+        NOISE_X, NUM_FEATURES_BASE, NUM_FEATURES_MIXED = 10, 1, 3000      # SIM 2: 10, 1, 3000 in paper
+        PCA_NUM_EVALUES = [0, 1]
 
     AllResults = np.zeros((len(PCA_NUM_EVALUES), 11, NUM_SIMULATIONS))
     print(f"Running simulations: NUM_SUBJECTS={NUM_SUBJECTS}, NUM_FEATURES_BASE={NUM_FEATURES_BASE}, NUM_FEATURES_MIXED={NUM_FEATURES_MIXED}")
@@ -84,9 +88,12 @@ def main():
         X0 = np.random.normal(size=(NUM_SUBJECTS, NUM_FEATURES_BASE))
         X0[:, 0] = Yb
         X0 = utils.normalize(X0)
-        Xmix = np.random.normal(size=(NUM_FEATURES_BASE, NUM_FEATURES_MIXED))**5
-        X1 = np.dot(X0, Xmix)
-        X2 = utils.normalize(X1)
+        if NUM_FEATURES_MIXED:
+            Xmix = np.random.normal(size=(NUM_FEATURES_BASE, NUM_FEATURES_MIXED))**5
+            X1 = np.dot(X0, Xmix)
+            X2 = utils.normalize(X1)
+        else:
+            X2 = X0
         X3 = utils.demean(X2+NOISE_X*np.random.normal(size=X2.shape))
         for j_idx, J in enumerate(PCA_NUM_EVALUES): # permuting pcaU gives same results as J=1 (ie null model ~ bad model)
             if J == 0:
@@ -116,8 +123,14 @@ def main():
             "std_corr_delta1", "std_corr_delta2", "std_corr_delta3",
         ]
     )
-    print(df[["J", "mean_delta1", "mean_delta2", "mean_delta3", "std_delta3", "mean_corr_delta1", "mean_corr_delta2", "mean_corr_delta3"]])
     df.to_csv("table1.csv")
+
+    PLOT_COLS = ["J", "mean_delta1", "mean_delta2", "mean_delta3", "std_delta3", "mean_corr_delta1", "mean_corr_delta2", "mean_corr_delta3"]
+    print(df[PLOT_COLS])
+    df.update(df[PLOT_COLS].applymap('{:,.2f}'.format))
+
+    utils.do_table(plt.subplot(1, 1, 1), df[PLOT_COLS])
+    plt.show()
 
 if __name__ == "__main__":
     main()
