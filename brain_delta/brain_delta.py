@@ -97,10 +97,10 @@ class BrainDelta:
         # 7. The initial model is Y B1 = X β1 + δ1. Do:
         #    (a) Compute initial age prediction β1 = X^-1 Y giving Y_B1 = X β1 (where X^-1 is the pseudo-inverse of X). 
         self.b1 = np.dot(np.linalg.pinv(self.x_norm), self.y_demean)
-        self.y_b1 = np.dot(self.x_norm, self.b1)
+        y_b1 = np.dot(self.x_norm, self.b1)
 
         #    (b) Compute initial brain age delta δ1 = Y_B1 Y. 
-        d1 = self.y_b1 - self.y_demean
+        d1 = y_b1 - self.y_demean
 
         # 8. The corrected model is δ1 = Y2 β2 + δ2q. Do: 
         #    (a) Compute corrected model fit β2 = Y2^-1 δ1 (correcting for bias in the initial fit and quadratic brain aging).
