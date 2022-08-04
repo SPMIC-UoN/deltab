@@ -4,7 +4,7 @@ Simulation 1 from Smith et al
 import numpy as np
 from matplotlib import pyplot as plt
 
-from brain_delta.brain_delta import BrainDelta
+from brain_delta.brain_delta import BrainDelta, Model
 
 import utils
 
@@ -49,15 +49,19 @@ def main():
     Y = utils.demean(Y)
 
     b = BrainDelta()
-    b.train(Y, X, include_quad=False)
+    b.train(Y, X)
+    y1 = b.predict(Y, X, model=Model.SIMPLE, return_delta=False)
+    d1 = b.predict(Y, X, model=Model.SIMPLE, return_delta=True)
+    y2 = b.predict(Y, X, model=Model.UNBIASED, return_delta=False)
+    d2 = b.predict(Y, X, model=Model.UNBIASED, return_delta=True)
 
-    utils.do_plot(plt.subplot(2, 3, 1), Y, b.y_b1, axlim=20, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
-    utils.do_plot(plt.subplot(2, 3, 2), Y, b.d1, axlim=15, horiz=True, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
-    utils.do_plot(plt.subplot(2, 3, 3), DELTA_TRUE, b.d1, axlim=10, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 1), Y, y1, axlim=20, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 2), Y, d1, axlim=15, horiz=True, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 3), DELTA_TRUE, d1, axlim=10, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
 
-    utils.do_plot(plt.subplot(2, 3, 4), Y, b.y_b2, axlim=20, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
-    utils.do_plot(plt.subplot(2, 3, 5), Y, b.d2, axlim=15, horiz=True, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
-    utils.do_plot(plt.subplot(2, 3, 6), DELTA_TRUE, b.d2, axlim=10, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 4), Y, y2, axlim=20, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 5), Y, d2, axlim=15, horiz=True, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
+    utils.do_plot(plt.subplot(2, 3, 6), DELTA_TRUE, d2, axlim=10, title='A.\rm  Predicted age \itY_{B1}\rm vs. age \itY')
 
     plt.show()
 
