@@ -1,8 +1,9 @@
 """
 Table 1 from Smith et al 
 """
+import sys
+
 import numpy as np
-from matplotlib import pyplot as plt
 import pandas as pd
 
 from brain_delta.brain_delta import Model, BrainDelta
@@ -127,10 +128,12 @@ def main(sim=1):
 
     PLOT_COLS = ["J", "mean_delta1", "mean_delta2", "mean_delta3", "std_delta3", "mean_corr_delta1", "mean_corr_delta2", "mean_corr_delta3"]
     print(df[PLOT_COLS])
-    df.update(df[PLOT_COLS].applymap('{:,.2f}'.format))
 
-    utils.do_table(plt.subplot(1, 1, 1), df[PLOT_COLS])
-    plt.show()
+    if "--plot" in sys.argv:
+        from matplotlib import pyplot as plt
+        df.update(df[PLOT_COLS].applymap('{:,.2f}'.format))
+        utils.do_table(plt.subplot(1, 1, 1), df[PLOT_COLS])
+        plt.show()
 
 if __name__ == "__main__":
     main()
