@@ -29,6 +29,10 @@ class Model:
     ALTERNATE=4
     ALTERNATE_QUADRATIC=5
 
+    @classmethod
+    def fromstr(cls, str):
+        return getattr(cls, str.upper(), None)
+
 class BrainDelta:
     """
     Class to predict brain age from features (e.g. IDPs, voxels)
