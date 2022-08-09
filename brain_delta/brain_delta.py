@@ -17,6 +17,8 @@ https://doi.org/10.1016/j.neuroimage.2019.06.017
     (a) Computecorrected model fit β2 = Y2^-1 δ1 (correcting for bias in the initial fit and quadratic brain aging)
     (b) Compute final brain age delta δ2q = δ1 - Y2 β2
 """
+import pickle
+
 import numpy as np
 from sklearn.decomposition import PCA
 
@@ -113,24 +115,23 @@ class BrainDelta:
 
         self._trained = True
 
-    def _demean(self, x, axis=0):
-        return x - np.nanmean(x, axis=axis)
+    def load(self, fname):
+        """
+        Load a trained model from a file
+        """
+        loaded = pickle.load(open(fname, "rb"))
+        if not type(loaded) == BrainDelta:
+            raise TypeError(f"File {fname} does not contain a saved BrainDelta object")
+        self.__dict__.update(loaded.__dict__)
+        self._trained = True
 
-    def _normalize(self, x, mean=None, std=None, axis=0):
-        if mean is None:
-            mean=np.mean(x, axis=axis)
-        if std is None:
-            std = np.nanstd(x, axis=axis)
-        return (x-mean) / std, mean, std
-
-    def _standardize_y(self, y):
-        return y - self.y_mean
-
-    def _standardize_x(self, x):
-        return self._normalize(x, mean=self.x_mean, std=self.x_std)[0]
-
-    def _orthogonalize(self, a, b):
-        return a - np.dot(b/np.linalg.norm(b), a)
+    def save(self, fname):
+        """
+        Save a trained model to a file
+        """
+        if not self._trained:
+            raise RuntimeError("Model is not trained")
+        pickle.dump(self, open(fname, "wb"))
 
     def predict(self, age, features, model=Model.UNBIASED_QUADRATIC, return_delta=False):
         """
@@ -196,58 +197,21 @@ class BrainDelta:
         else:
             return delta_predict + age
 
-if __name__ == "__main__":
-    # How many subjects for each true age
-    REPS_PER_AGE = 5
+    def _demean(self, x, axis=0):
+        return x - np.nanmean(x, axis=axis)
 
-    # Subject age range
-    MIN_AGE, MAX_AGE = 30, 40
-    NUM_AGES = (MAX_AGE - MIN_AGE + 1)
-    NUM_SUBJECTS = NUM_AGES * REPS_PER_AGE
+    def _normalize(self, x, mean=None, std=None, axis=0):
+        if mean is None:
+            mean=np.mean(x, axis=axis)
+        if std is None:
+            std = np.nanstd(x, axis=axis)
+        return (x-mean) / std, mean, std
 
-    # Number of features and weights
-    FEATURE_WEIGHTS = [0.8, 0.1, 0.1]
-    FEATURE_NOISE_STD = 0.5
-    NUM_FEATURES = len(FEATURE_WEIGHTS)
+    def _standardize_y(self, y):
+        return y - self.y_mean
 
-    # Difference in brain age between subjects of same true age
-    BRAIN_AGE_DELTA = 5
+    def _standardize_x(self, x):
+        return self._normalize(x, mean=self.x_mean, std=self.x_std)[0]
 
-    # True ages
-    Y = np.concatenate([np.repeat(age, REPS_PER_AGE) for age in range(MIN_AGE, MAX_AGE+1)])
-    print("TRUE AGE")
-    print(Y)
-
-    # For all individuals of a given age we will assume brain age deltas varying linearly
-    DELTA_TRUE = np.tile(np.linspace(-BRAIN_AGE_DELTA/2, BRAIN_AGE_DELTA/2, num=REPS_PER_AGE), NUM_AGES)
-    BRAIN_AGE_TRUE = Y + DELTA_TRUE
-    print("TRUE DELTA")
-    print(DELTA_TRUE)
-    print("TRUE BRAIN AGE")
-    print(BRAIN_AGE_TRUE)
-
-    # Construct some features that predict brain age with noise
-    X = np.zeros((NUM_SUBJECTS, NUM_FEATURES), dtype=float)
-    for idx, weights in enumerate(FEATURE_WEIGHTS):
-        X[:, idx] = BRAIN_AGE_TRUE * weights + np.random.normal(size=(NUM_SUBJECTS), scale=FEATURE_NOISE_STD)
-    print("FEATURES")
-    print(X)
-
-    # Train the model
-    b = BrainDelta()
-    b.train(Y, X)
-
-    print("BIASED DELTA")
-    print(b.d1)
-
-    print("UNBIASED DELTA")
-    print(b.d2)
-
-    # Check with some predictions
-    delta = b.predict(Y, X)
-    print("PREDICTED AGES (unbiased)")
-    print(delta)
-
-    delta = b.predict(Y, X, unbiased_model=False)
-    print("PREDICTED AGES (biased)")
-    print(delta)
+    def _orthogonalize(self, a, b):
+        return a - np.dot(b/np.linalg.norm(b), a)
