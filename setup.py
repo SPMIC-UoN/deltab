@@ -10,7 +10,7 @@ import io
 from setuptools import setup
 from setuptools import find_packages
 
-MODULE = 'brain_delta'
+MODULE = 'deltab'
 
 def get_filetext(rootdir, filename):
     """ Get the text of a local file """
@@ -95,7 +95,7 @@ kwargs = {
     },
     'entry_points' : {
         'console_scripts' : [
-            "brain_delta=brain_delta.main:main",
+            "deltab=deltab.main:main",
         ],
     },
     'classifiers' : [

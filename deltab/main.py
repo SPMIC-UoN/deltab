@@ -1,6 +1,6 @@
 #!/bin/env python
 """
-BRAIN_DELTA: Brain age calculation tool
+DELTAB: Brain age calculation tool
 
 Command line interface
 """
@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 from ._version import __version__
-from .brain_delta import BrainDelta, Model
+from .deltab import BrainDelta, Model
 
 def load_data(fname):
     for skiprows in (0, 1):
