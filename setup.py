@@ -80,7 +80,7 @@ def get_version(rootdir):
 module_dir = os.path.abspath(os.path.dirname(__file__))
 
 kwargs = {
-    'name' : 'brain delta',
+    'name' : 'deltab',
     'version' : get_version(module_dir),
     'description' : 'Brain age estimator',
     'long_description' : get_filetext(module_dir, 'README.md'),
