@@ -13,6 +13,16 @@ import numpy as np
 from ._version import __version__
 from .brain_delta import BrainDelta, Model
 
+def load_data(fname):
+    for skiprows in (0, 1):
+        for quotechar in (None, '"', "'"):
+            for delimiter in (None, ",", "\t"):
+                try:
+                    return np.loadtxt(fname, delimiter=delimiter, quotechar=quotechar)
+                except:
+                    pass
+    raise ValueError("Could not load data in {fname} - must be space, comma or tab delimited")
+
 def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
     parser.add_argument('--load', help='Path to file to load trained model data from')
@@ -39,8 +49,8 @@ def main():
     elif args.load:
         b.load(args.load)
     else:
-        ages = np.loadtxt(args.train_ages)
-        features = np.loadtxt(args.train_features)
+        ages = load_data(args.train_ages)
+        features = load_data(args.train_features)
         b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num)
 
     if args.save:
@@ -49,8 +59,8 @@ def main():
     if args.predict is not None:
         if args.predict_ages and args.predict_features:
             # We have data for prediction
-            predict_ages = np.loadtxt(args.predict_ages)
-            predict_features = np.loadtxt(args.predict_features)
+            predict_ages = load_data(args.predict_ages)
+            predict_features = load_data(args.predict_features)
         elif not args.load:
             if not args.predict_ages and not args.predict_features:
                 # Use training data to output prediction
