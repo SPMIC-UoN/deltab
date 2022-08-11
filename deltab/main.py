@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 from ._version import __version__
-from .deltab import BrainDelta, Model
+from . import BrainDelta, Model
 
 def load_data(fname):
     for skiprows in (0, 1):
@@ -27,15 +27,15 @@ def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
     parser.add_argument('--load', help='Path to file to load trained model data from')
     parser.add_argument('--save', help='Path to file to save trained model data to')
-    parser.add_argument('--train-ages', help='Path to text file containing real ages for subjects')
-    parser.add_argument('--train-features',  help='Path to text file containing regressor features for subjects')
+    parser.add_argument('--train-ages', help='Path to delimited text file containing 1D real ages for training')
+    parser.add_argument('--train-features',  help='Path to delimited text file containing 2D regressor features for training')
     parser.add_argument('--feature-proportion', type=float, help='Proportion of features to retain in PCA reduction (0-1)')
     parser.add_argument('--feature-num', type=int, help='Number of features to retain in PCA reduction')
-    parser.add_argument('--predict', help='Output mode', choices=['delta', 'age'])
-    parser.add_argument('--predict-ages', help='Path to text file containing true ages for prediction')
-    parser.add_argument('--predict-features', help='Path to text file containing regressor features for prediction')
+    parser.add_argument('--predict', help='Output mode', choices=['delta', 'age'], default="delta")
+    parser.add_argument('--predict-ages', help='Path to delimited text file containing 1D true ages for prediction')
+    parser.add_argument('--predict-features', help='Path to delimited text file containing 2D regressor features for prediction')
     parser.add_argument('--predict-model', help='Model for prediction', choices=['simple', 'unbiased', 'unbiased_quadratic', 'alternate', 'alternate_quadratic'], default='unbiased_quadratic')
-    parser.add_argument('--predict-output', help='File to save prediction to', default="braindelta.txt")
+    parser.add_argument('--predict-output', help='File to save prediction to', default="deltab.txt")
     parser.add_argument('--overwrite', action="store_true", default=False, help='If specified, overwrite any existing output')
     args = parser.parse_args()
 

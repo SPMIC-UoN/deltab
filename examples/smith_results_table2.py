@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from deltab.deltab import Model, BrainDelta
+from deltab import Model, BrainDelta
 
 import utils
 

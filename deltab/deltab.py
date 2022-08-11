@@ -46,7 +46,7 @@ class BrainDelta:
 
         :param ages: Array of subject ages
         :param features: 2D array of [subjects, features]
-        :param ev_proportion: Optional proportion of features to be retained in model
+        :param ev_proportion: Optional proportion of features to be retained in model (0-1)
         :param ev_num: Optional number of features to be retained in model
         """
         if ev_proportion and ev_num:
@@ -143,7 +143,7 @@ class BrainDelta:
 
         :param age: Array of subject true ages
         :param features: Array of [subjects, features]. Must be same features used in training
-        :param unbiased_model: Use the unbiased model (default True)
+        :param model: Model to use for prediction
         :param return_delta: Return the brain age delta (brain age - true age) rather than brain age
         """
         if not self._trained:
@@ -177,16 +177,11 @@ class BrainDelta:
 
         # Generate the prediction
         if model == Model.ALTERNATE_QUADRATIC:
-            #print("dot2: ", y2.shape, self.gammasq.shape)
             d = features_norm - np.dot(y2, self.gammasq)
-            delta_predict = np.squeeze(np.dot(d, np.linalg.pinv(self.gammasq[np.newaxis, 0, :])) )
-            #print(delta_predict.shape)
+            delta_predict = np.squeeze(np.dot(d, np.linalg.pinv(self.gammasq[np.newaxis, 0, :])))
         elif model == Model.ALTERNATE:
-            #print("dot: ", age_demean.shape, self.gamma.shape)
             d = features_norm - np.dot(age_demean[..., np.newaxis], self.gamma)
-            #print("d", d.shape, np.mean(d), np.std(d))
             delta_predict = np.squeeze(np.dot(d, np.linalg.pinv(self.gamma)))
-            #print(delta_predict.shape)
         else:
             # Compute initial brain age delta δ1 = Y_B1 Y. 
             delta_predict = np.dot(features_norm, self.b1) - age_demean

@@ -4,7 +4,7 @@ Simulation 1 from Smith et al
 import numpy as np
 from matplotlib import pyplot as plt
 
-from deltab.deltab import BrainDelta, Model
+from deltab import BrainDelta, Model
 
 import utils
 
