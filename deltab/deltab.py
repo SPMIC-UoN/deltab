@@ -77,7 +77,7 @@ class BrainDelta:
             if ev_num:
                 self.ev_num = ev_num
             else:
-                self.ev_num = max(1, int(ev_proportion * self.x_demean.shape[1]))
+                self.ev_num = max(1, int(ev_proportion * self.xtrain.shape[1]))
             self.pca = PCA(n_components=self.ev_num)
             self.x_reduced = self.pca.fit_transform(self.xtrain)
         else:
