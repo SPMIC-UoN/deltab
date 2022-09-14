@@ -40,7 +40,7 @@ class BrainDelta:
     def __init__(self):
         self._trained = False
 
-    def train(self, ages, features, ev_proportion=None, ev_num=None):
+    def train(self, ages, features, ev_proportion=None, ev_num=None, ev_kg=False, ev_var=None):
         """
         Train model
 
@@ -48,9 +48,10 @@ class BrainDelta:
         :param features: 2D array of [subjects, features]
         :param ev_proportion: Optional proportion of features to be retained in model (0-1)
         :param ev_num: Optional number of features to be retained in model
+        :param ev_kg: If True, use Kaiser-Guttmann criterion to select number of features to retain
         """
-        if ev_proportion and ev_num:
-            raise ValueError("Only one of ev_proportion and ev_num may be specified")
+        if sum([ev_proportion is not None, ev_num is not None, ev_kg, ev_var is not None]) > 1:
+            raise ValueError("Only one of ev_proportion, ev_num and ev_kg may be specified")
 
         # 1. Your vector of ages is Y (subjects 1)
         self.ytrain = np.squeeze(ages)
@@ -70,22 +71,40 @@ class BrainDelta:
         self.y_mean = np.mean(self.ytrain)
         self.y_demean = self._standardize_y(self.ytrain)
 
-        if ev_num or ev_proportion:
+        self.x_norm, self.x_mean, self.x_std = self._normalize(self.xtrain)
+        if ev_num or ev_proportion or ev_kg or ev_var:
             # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
             # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
             # order as we require
             if ev_num:
+                # Fixed number specified
+                #print(f"Fixed: Using {ev_num} evalues")
                 self.ev_num = ev_num
+                self.pca = PCA(n_components=self.ev_num)
+            elif ev_kg:
+                # Kaiser-Guttmann criterion
+                pca = PCA()
+                pca.fit(self.x_norm)
+                mean = np.mean(pca.explained_variance_)
+                gt_one = [v for v in pca.explained_variance_ if v > 1]
+                #print(f"KG: {ev_var} Using {len(gt_one)} evalues mean {mean}")
+                self.pca = PCA(n_components=len(gt_one))
+            elif ev_var:
+                # Criteria is proportion of explained variance
+                self.pca = PCA(n_components=ev_var, svd_solver='full')
+                #print(f"Variance: {ev_var}")
             else:
-                self.ev_num = max(1, int(ev_proportion * self.xtrain.shape[1]))
-            self.pca = PCA(n_components=self.ev_num)
-            self.x_reduced = self.pca.fit_transform(self.xtrain)
+                # Proportion specified
+                self.ev_num = max(1, int(ev_proportion * self.x_norm.shape[1]))
+                #print(f"Proportion: {ev_proportion} Using {self.ev_num} evalues")
+                self.pca = PCA(n_components=self.ev_num)
+            self.x_reduced = self.pca.fit_transform(self.x_norm)
+            #print(f"Using {len(self.pca.explained_variance_)} evalues")
         else:
             # No reduction of features
-            self.ev_num = self.xtrain.shape[1]
+            self.ev_num = self.x_norm.shape[1]
             self.pca = None
-            self.x_reduced = self.xtrain
-        self.x_norm, self.x_mean, self.x_std = self._normalize(self.x_reduced)
+            self.x_reduced = self.x_norm
 
         # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
         self.ysq = np.square(self.y_demean)
@@ -102,8 +121,8 @@ class BrainDelta:
 
         # 7. The initial model is Y B1 = X β1 + δ1. Do:
         #    (a) Compute initial age prediction β1 = X^-1 Y giving Y_B1 = X β1 (where X^-1 is the pseudo-inverse of X). 
-        self.b1 = np.dot(np.linalg.pinv(self.x_norm), self.y_demean)
-        y_b1 = np.dot(self.x_norm, self.b1)
+        self.b1 = np.dot(np.linalg.pinv(self.x_reduced), self.y_demean)
+        y_b1 = np.dot(self.x_reduced, self.b1)
 
         #    (b) Compute initial brain age delta δ1 = Y_B1 Y. 
         d1 = y_b1 - self.y_demean
@@ -114,8 +133,8 @@ class BrainDelta:
         self.b2sq = np.dot(np.linalg.pinv(self.y2sq), d1)
 
         # Alternative model
-        self.gamma = np.dot(np.linalg.pinv(self.y2), self.x_norm)
-        self.gammasq = np.dot(np.linalg.pinv(self.y2sq), self.x_norm)
+        self.gamma = np.dot(np.linalg.pinv(self.y2), self.x_reduced)
+        self.gammasq = np.dot(np.linalg.pinv(self.y2sq), self.x_reduced)
 
         self._trained = True
 
@@ -162,9 +181,9 @@ class BrainDelta:
             raise ValueError("Number of features must match training features")
 
         age_demean = self._standardize_y(age)
-        if self.pca is not None:
-            features = self.pca.transform(features)
         features_norm = self._standardize_x(features)
+        if self.pca is not None:
+            features_norm = self.pca.transform(features_norm)
 
         # Generate the quadratic age dependence if we need it
         if model in (Model.UNBIASED_QUADRATIC, Model.ALTERNATE_QUADRATIC):

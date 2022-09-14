@@ -43,6 +43,8 @@ def main():
     parser.add_argument('--remove-nan-subjects', action="store_true", default=False, help='Remove subjects with NaN as age or in features')
     parser.add_argument('--feature-proportion', type=float, help='Proportion of features to retain in PCA reduction (0-1)')
     parser.add_argument('--feature-num', type=int, help='Number of features to retain in PCA reduction')
+    parser.add_argument('--feature-var', type=float, help='Retain features that explain at lease this proportion of the variance')
+    parser.add_argument('--kaiser-guttmann', action="store_true", default=False, help='Use Kaiser-Guttmann criterion to select number of features to retain in PCA reduction')
     parser.add_argument('--predict', help='Output mode', choices=['delta', 'age'], default="delta")
     parser.add_argument('--predict-ages', help='Path to delimited text file containing 1D true ages for prediction')
     parser.add_argument('--predict-features', help='Path to delimited text file containing 2D regressor features for prediction')
@@ -66,7 +68,7 @@ def main():
         if args.remove_nan_subjects:
             ages, features = remove_nan_subjects(ages, features)
             np.savetxt("ages_included.txt", ages) # FIXME temporary for comparison
-        b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num)
+        b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num, ev_kg=args.kaiser_guttmann, ev_var=args.feature_var)
 
     if args.save:
         b.save(args.save)
