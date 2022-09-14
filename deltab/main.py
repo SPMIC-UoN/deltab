@@ -23,12 +23,24 @@ def load_data(fname):
                     pass
     raise ValueError("Could not load data in {fname} - must be space, comma or tab delimited")
 
+def remove_nan_subjects(ages, features):
+    num_subjects = ages.shape[0]
+    ages_out, features_out = [], []
+    for idx in range(num_subjects):
+        if np.isnan(ages[idx]) or np.count_nonzero(np.isnan(features[idx, :])):
+            print(f"Removing subject {idx} because NaN found in age or features")
+        else:
+            ages_out.append(ages[idx])
+            features_out.append(features[idx])
+    return np.array(ages_out), np.array(features_out)
+
 def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
     parser.add_argument('--load', help='Path to file to load trained model data from')
     parser.add_argument('--save', help='Path to file to save trained model data to')
     parser.add_argument('--train-ages', help='Path to delimited text file containing 1D real ages for training')
     parser.add_argument('--train-features',  help='Path to delimited text file containing 2D regressor features for training')
+    parser.add_argument('--remove-nan-subjects', action="store_true", default=False, help='Remove subjects with NaN as age or in features')
     parser.add_argument('--feature-proportion', type=float, help='Proportion of features to retain in PCA reduction (0-1)')
     parser.add_argument('--feature-num', type=int, help='Number of features to retain in PCA reduction')
     parser.add_argument('--predict', help='Output mode', choices=['delta', 'age'], default="delta")
@@ -51,6 +63,9 @@ def main():
     else:
         ages = load_data(args.train_ages)
         features = load_data(args.train_features)
+        if args.remove_nan_subjects:
+            ages, features = remove_nan_subjects(ages, features)
+            np.savetxt("ages_included.txt", ages) # FIXME temporary for comparison
         b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num)
 
     if args.save:
