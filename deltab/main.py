@@ -34,13 +34,20 @@ def remove_nan_subjects(ages, features):
             features_out.append(features[idx])
     return np.array(ages_out), np.array(features_out)
 
+def nan_median_impute(features):
+    print(f"Imputing median for NaN features")
+    median = np.nanmedian(features, axis=1)
+    inds = np.where(np.isnan(features))
+    features[inds] = np.take(median, inds[1])
+    return features
+
 def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
     parser.add_argument('--load', help='Path to file to load trained model data from')
     parser.add_argument('--save', help='Path to file to save trained model data to')
     parser.add_argument('--train-ages', help='Path to delimited text file containing 1D real ages for training')
     parser.add_argument('--train-features',  help='Path to delimited text file containing 2D regressor features for training')
-    parser.add_argument('--remove-nan-subjects', action="store_true", default=False, help='Remove subjects with NaN as age or in features')
+    parser.add_argument('--feature-nans', help='Strategy for dealing with subjects with NaN in features', choices=["median", "remove"], default="median")
     parser.add_argument('--feature-proportion', type=float, help='Proportion of features to retain in PCA reduction (0-1)')
     parser.add_argument('--feature-num', type=int, help='Number of features to retain in PCA reduction')
     parser.add_argument('--feature-var', type=float, help='Retain features that explain at lease this proportion of the variance')
@@ -65,9 +72,11 @@ def main():
     else:
         ages = load_data(args.train_ages)
         features = load_data(args.train_features)
-        if args.remove_nan_subjects:
+        if args.feature_nans == "remove":
             ages, features = remove_nan_subjects(ages, features)
             np.savetxt("ages_included.txt", ages) # FIXME temporary for comparison
+        else:
+            features = nan_median_impute(features)
         b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num, ev_kg=args.kaiser_guttmann, ev_var=args.feature_var)
 
     if args.save:
