@@ -14,6 +14,12 @@ from ._version import __version__
 from . import BrainDelta, Model
 
 def load_data(fname):
+    """
+    Load Numpy array data from a text file
+    
+    The file may be delimited in various ways and may or may not have a 
+    header. We basically try all possibilities until something works
+    """
     for skiprows in (0, 1):
         for quotechar in (None, '"', "'"):
             for delimiter in (None, ",", "\t"):
@@ -24,6 +30,9 @@ def load_data(fname):
     raise ValueError("Could not load data in {fname} - must be space, comma or tab delimited")
 
 def remove_nan_subjects(ages, features):
+    """
+    Remove subjects who have NaN in any feature (or NaN true age)
+    """
     num_subjects = ages.shape[0]
     ages_out, features_out = [], []
     for idx in range(num_subjects):
@@ -35,6 +44,9 @@ def remove_nan_subjects(ages, features):
     return np.array(ages_out), np.array(features_out)
 
 def nan_median_impute(features):
+    """
+    Replace NaN features with median value for that feature
+    """
     print(f"Imputing median for NaN features")
     median = np.nanmedian(features, axis=1)
     inds = np.where(np.isnan(features))
@@ -57,6 +69,7 @@ def main():
     parser.add_argument('--predict-features', help='Path to delimited text file containing 2D regressor features for prediction')
     parser.add_argument('--predict-model', help='Model for prediction', choices=['simple', 'unbiased', 'unbiased_quadratic', 'alternate', 'alternate_quadratic'], default='unbiased_quadratic')
     parser.add_argument('--predict-output', help='File to save prediction to', default="deltab.txt")
+    parser.add_argument('--true-ages-output', help='File to save true ages, if required. Useful if removing subjects with NaNs', default=None)
     parser.add_argument('--overwrite', action="store_true", default=False, help='If specified, overwrite any existing output')
     args = parser.parse_args()
 
@@ -74,7 +87,6 @@ def main():
         features = load_data(args.train_features)
         if args.feature_nans == "remove":
             ages, features = remove_nan_subjects(ages, features)
-            np.savetxt("ages_included.txt", ages) # FIXME temporary for comparison
         else:
             features = nan_median_impute(features)
         b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num, ev_kg=args.kaiser_guttmann, ev_var=args.feature_var)
@@ -101,6 +113,10 @@ def main():
             raise ValueError(f"Output file {args.predict_output} already exists - remove or specify a different name")
         prediction = b.predict(predict_ages, predict_features, model=Model.fromstr(args.predict_model), return_delta=True if args.predict == 'delta' else False)
         np.savetxt(args.predict_output, prediction)
+
+        if args.true_ages_output:
+            # Save true ages for included subjects - this is useful if we are removing subjects with NaNs
+            np.savetxt(args.true_ages_output, predict_ages)
 
 if __name__ == "__main__":
     main()
