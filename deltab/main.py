@@ -7,13 +7,16 @@ Command line interface
 import os
 import argparse
 import sys
+import logging
 
 import numpy as np
 
 from ._version import __version__
 from . import BrainDelta, Model
 
-def load_data(fname):
+LOG = logging.getLogger(__name__)
+
+def _load_data(fname):
     """
     Load Numpy array data from a text file
     
@@ -29,7 +32,7 @@ def load_data(fname):
                     pass
     raise ValueError("Could not load data in {fname} - must be space, comma or tab delimited")
 
-def remove_nan_subjects(ages, features):
+def _remove_nan_subjects(ages, features):
     """
     Remove subjects who have NaN in any feature (or NaN true age)
     """
@@ -37,21 +40,36 @@ def remove_nan_subjects(ages, features):
     ages_out, features_out = [], []
     for idx in range(num_subjects):
         if np.isnan(ages[idx]) or np.count_nonzero(np.isnan(features[idx, :])):
-            print(f"Removing subject {idx} because NaN found in age or features")
+            LOG.debug(f" - Removing subject {idx} because NaN found in age or features")
         else:
             ages_out.append(ages[idx])
             features_out.append(features[idx])
+    if len(ages_out) != num_subjects:
+        LOG.info(f" - Removed {num_subjects-len(ages_out)} subjects because NaN found in age or features")
     return np.array(ages_out), np.array(features_out)
 
-def nan_median_impute(features):
+def _nan_median_impute(features):
     """
     Replace NaN features with median value for that feature
     """
-    print(f"Imputing median for NaN features")
     median = np.nanmedian(features, axis=1)
     inds = np.where(np.isnan(features))
-    features[inds] = np.take(median, inds[1])
+    if len(inds) > 0:
+        LOG.info(f" - Imputing median for {len(inds)} NaN feature values")
+        features[inds] = np.take(median, inds[1])
     return features
+
+def _setup_logging(args):
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(levelname)s: %(message)s')
+    handler.setFormatter(formatter)
+    logging.getLogger().addHandler(handler)
 
 def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
@@ -71,24 +89,30 @@ def main():
     parser.add_argument('--predict-output', help='File to save prediction to', default="deltab.txt")
     parser.add_argument('--true-ages-output', help='File to save true ages, if required. Useful if removing subjects with NaNs', default=None)
     parser.add_argument('--overwrite', action="store_true", default=False, help='If specified, overwrite any existing output')
+    parser.add_argument('--debug', action="store_true", default=False, help='Enable debug output')
     args = parser.parse_args()
 
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
 
+    _setup_logging(args)
     b = BrainDelta()
+    LOG.info(f"BRAIN AGE PREDICTOR v{__version__}")
+
     if not args.load and not (args.train_ages and args.train_features):
         parser.error("Must either load trained model or provide training data")
     elif args.load:
+        LOG.info(f" - Loading model from {args.load}")
         b.load(args.load)
     else:
-        ages = load_data(args.train_ages)
-        features = load_data(args.train_features)
+        LOG.info(f" - Training model - ages: {args.train_ages}, features: {args.train_features}")
+        ages = _load_data(args.train_ages)
+        features = _load_data(args.train_features)
         if args.feature_nans == "remove":
-            ages, features = remove_nan_subjects(ages, features)
+            ages, features = _remove_nan_subjects(ages, features)
         else:
-            features = nan_median_impute(features)
+            features = _nan_median_impute(features)
         b.train(ages, features, ev_proportion=args.feature_proportion, ev_num=args.feature_num, ev_kg=args.kaiser_guttmann, ev_var=args.feature_var)
 
     if args.save:
@@ -96,12 +120,12 @@ def main():
 
     if args.predict is not None:
         if args.predict_ages and args.predict_features:
-            # We have data for prediction
-            predict_ages = load_data(args.predict_ages)
-            predict_features = load_data(args.predict_features)
+            LOG.info(f" - Generating prediction - ages: {args.predict_ages}, features: {args.predict_features}")
+            predict_ages = _load_data(args.predict_ages)
+            predict_features = _load_data(args.predict_features)
         elif not args.load:
             if not args.predict_ages and not args.predict_features:
-                # Use training data to output prediction
+                LOG.info(f" - Generating prediction using training data")
                 predict_ages = ages
                 predict_features = features
             elif not args.predict_ages or not args.predict_features:
@@ -112,10 +136,11 @@ def main():
         if os.path.exists(args.predict_output) and not args.overwrite:
             raise ValueError(f"Output file {args.predict_output} already exists - remove or specify a different name")
         prediction = b.predict(predict_ages, predict_features, model=Model.fromstr(args.predict_model), return_delta=True if args.predict == 'delta' else False)
+        LOG.info(f" - Saving predicted {args.predict} to {args.predict_output}")
         np.savetxt(args.predict_output, prediction)
 
         if args.true_ages_output:
-            # Save true ages for included subjects - this is useful if we are removing subjects with NaNs
+            LOG.info(f" - Saving true ages for included subjects to {args.true_ages_output}")
             np.savetxt(args.true_ages_output, predict_ages)
 
 if __name__ == "__main__":

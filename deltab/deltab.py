@@ -18,9 +18,12 @@ https://doi.org/10.1016/j.neuroimage.2019.06.017
     (b) Compute final brain age delta δ2q = δ1 - Y2 β2
 """
 import pickle
+import logging
 
 import numpy as np
 from sklearn.decomposition import PCA
+
+LOG = logging.getLogger(__name__)
 
 class Model:
     SIMPLE=1
@@ -67,6 +70,8 @@ class BrainDelta:
             raise ValueError("Number of subjects does not match number of rows in feature matrix")
         self.num_features_train = self.xtrain.shape[1]
 
+        LOG.info(f" - Number of subjects: {self.num_subjects_train}, number of features: {self.num_features_train}")
+        
         # 3. Subtract the means from Y and all columns in X
         self.y_mean = np.mean(self.ytrain)
         self.y_demean = self._standardize_y(self.ytrain)
@@ -77,34 +82,29 @@ class BrainDelta:
             # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
             # order as we require
             if ev_num:
-                # Fixed number specified
-                #print(f"Fixed: Using {ev_num} evalues")
+                LOG.info(f" - Using fixed number of features: {ev_num}")
                 self.ev_num = ev_num
                 self.pca = PCA(n_components=self.ev_num)
             elif ev_kg:
-                # Kaiser-Guttmann criterion
                 pca = PCA()
                 pca.fit(self.x_norm)
                 mean = np.mean(pca.explained_variance_)
-                gt_one = [v for v in pca.explained_variance_ if v > 1]
-                #print(f"KG: {ev_var} Using {len(gt_one)} evalues mean {mean}")
-                self.pca = PCA(n_components=len(gt_one))
+                ev_num_kg = len([v for v in pca.explained_variance_ if v > 1])
+                LOG.info(f" - Selected {ev_num_kg} features using Kaiser-Guttmann criterion")
+                self.pca = PCA(n_components=ev_num_kg)
             elif ev_var:
-                # Criteria is proportion of explained variance
                 self.pca = PCA(n_components=ev_var, svd_solver='full')
-                #print(f"Variance: {ev_var}")
+                LOG.info(f" - Selecting features to explain {ev_var} proportion of variance")
             else:
-                # Proportion specified
                 self.ev_num = max(1, int(ev_proportion * self.x_norm.shape[1]))
-                #print(f"Proportion: {ev_proportion} Using {self.ev_num} evalues")
+                LOG.info(f" - Selecting {self.ev_num} features as {ev_proportion} proportion of total")
                 self.pca = PCA(n_components=self.ev_num)
             self.x_reduced = self.pca.fit_transform(self.x_norm)
-            #print(f"Using {len(self.pca.explained_variance_)} evalues")
         else:
-            # No reduction of features
             self.ev_num = self.x_norm.shape[1]
             self.pca = None
             self.x_reduced = self.x_norm
+            LOG.info(f" - Using all {self.ev_num} features")
 
         # 5. Compute Y2, demean it and orthogonalise it with respect to Y to give Y2 o
         self.ysq = np.square(self.y_demean)
@@ -137,6 +137,7 @@ class BrainDelta:
         self.gammasq = np.dot(np.linalg.pinv(self.y2sq), self.x_reduced)
 
         self._trained = True
+        LOG.info(f" - Training complete")
 
     def load(self, fname):
         """
