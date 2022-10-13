@@ -49,7 +49,8 @@ A typical usage would involve the following inputs:
 We can then run the prediction as:
 
 ```
-deltab  --train-ages TRUE_AGES.txt --train-features IDPS.txt --predict-model unbiased_quadratic --predict-output BRAIN_AGE.txt --predict age
+deltab  --train-ages TRUE_AGES.txt --train-features IDPS.txt \
+        --predict-model unbiased_quadratic --predict-output BRAIN_AGE.txt --predict age
 ```
 
 #### Training options
