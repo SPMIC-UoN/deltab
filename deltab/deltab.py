@@ -17,6 +17,7 @@ https://doi.org/10.1016/j.neuroimage.2019.06.017
     (a) Computecorrected model fit β2 = Y2^-1 δ1 (correcting for bias in the initial fit and quadratic brain aging)
     (b) Compute final brain age delta δ2q = δ1 - Y2 β2
 """
+import os
 import pickle
 import logging
 
@@ -156,6 +157,40 @@ class BrainDelta:
         if not self._trained:
             raise RuntimeError("Model is not trained")
         pickle.dump(self, open(fname, "wb"))
+
+    def save_text(self, dpath):
+        """
+        Save a trained model data to a folder in text format suitable for reading into other programs
+
+        Output: ytrain - Input age data
+                xtrain - Input features
+                ynorm - Normalized input age data (demeaned)
+                xnorm - Normalized input features (demeaned and std 1)
+                xreduce - PCA reduced input features
+                pca_components - PCA principal components
+                ysq - Square of normalized input age data
+                ysqnorm - Normalized (demeaned) square of age data
+                yqsorth - Normalized square age data orthogonalized to age
+        """
+        if not self._trained:
+            raise RuntimeError("Model is not trained")
+        os.makedirs(dpath, exist_ok=True)
+        output_data = [
+            ("ytrain", self.ytrain),
+            ("xtrain", self.xtrain),
+            ("xnorm", self.x_norm),
+            ("ynorm", self.y_demean),
+            ("xreduce", self.x_reduced),
+            ("ysq", self.ysq),
+            ("ysqnorm", self.ysq_demean),
+            ("ysqorth", self.ysq_orth),
+        ]
+        if self.pca is not None:
+            output_data.append(("pca_components", self.pca.components_))
+            output_data.append(("pca_explained_variance", self.pca.explained_variance_))
+        for fname, npdata in output_data:
+            fpath = os.path.join(dpath, fname)
+            np.savetxt(fpath, npdata)
 
     def predict(self, age, features, model=Model.UNBIASED_QUADRATIC, return_delta=False):
         """

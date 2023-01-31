@@ -75,6 +75,7 @@ def main():
     parser = argparse.ArgumentParser(f'Brain age calculator v{__version__}', add_help=True)
     parser.add_argument('--load', help='Path to file to load trained model data from')
     parser.add_argument('--save', help='Path to file to save trained model data to')
+    parser.add_argument('--save-text', help='Path to folder to save trained model data in text format. Note that there is currently no load facility for this data')
     parser.add_argument('--train-ages', help='Path to delimited text file containing 1D real ages for training')
     parser.add_argument('--train-features',  help='Path to delimited text file containing 2D regressor features for training')
     parser.add_argument('--feature-nans', help='Strategy for dealing with subjects with NaN in features', choices=["median", "remove"], default="median")
@@ -117,6 +118,8 @@ def main():
 
     if args.save:
         b.save(args.save)
+    if args.save_text:
+        b.save(args.save_text)
 
     if args.predict is not None:
         if args.predict_ages and args.predict_features:
