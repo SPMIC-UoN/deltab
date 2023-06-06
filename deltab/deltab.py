@@ -44,7 +44,7 @@ class BrainDelta:
     def __init__(self):
         self._trained = False
 
-    def train(self, ages, features, ev_proportion=None, ev_num=None, ev_kg=False, ev_var=None):
+    def train(self, ages, features, ev_proportion=None, ev_num=None, ev_kg=False, ev_var=None, conf=None):
         """
         Train model
 
@@ -53,6 +53,7 @@ class BrainDelta:
         :param ev_proportion: Optional proportion of features to be retained in model (0-1)
         :param ev_num: Optional number of features to be retained in model
         :param ev_kg: If True, use Kaiser-Guttmann criterion to select number of features to retain
+        :param conf: Optional matrix of confounding features [subjects, features] whose effect we wish to remove
         """
         if sum([ev_proportion is not None, ev_num is not None, ev_kg, ev_var is not None]) > 1:
             raise ValueError("Only one of ev_proportion, ev_num and ev_kg may be specified")
@@ -78,6 +79,13 @@ class BrainDelta:
         self.y_demean = self._standardize_y(self.ytrain)
 
         self.x_norm, self.x_mean, self.x_std = self._normalize(self.xtrain)
+
+        # 3a. Optional deconfounding
+        self.conf = conf
+        if conf is not None:
+           self.conf_beta = np.linalg.pinv(conf)*self.x_norm
+           self.x_norm = self.x_norm - np.dot(conf, self.conf_beta)
+
         if ev_num or ev_proportion or ev_kg or ev_var:
             # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
             # Note that np.linalg.svd returns eigenvalues/vectors sorted in descending
@@ -192,7 +200,7 @@ class BrainDelta:
             fpath = os.path.join(dpath, fname)
             np.savetxt(fpath, npdata)
 
-    def predict(self, age, features, model=Model.UNBIASED_QUADRATIC, return_delta=False):
+    def predict(self, age, features, model=Model.UNBIASED_QUADRATIC, return_delta=False, conf=None):
         """
         Predict brain age
 
@@ -200,6 +208,7 @@ class BrainDelta:
         :param features: Array of [subjects, features]. Must be same features used in training
         :param model: Model to use for prediction
         :param return_delta: Return the brain age delta (brain age - true age) rather than brain age
+        :param conf: Optional matrix of confounding features [subjects, features] matching those used in training
         """
         if not self._trained:
             raise RuntimeError("Model is not trained")
@@ -217,7 +226,7 @@ class BrainDelta:
             raise ValueError("Number of features must match training features")
 
         age_demean = self._standardize_y(age)
-        features_norm = self._standardize_x(features)
+        features_norm = self._standardize_x(features, conf)
         if self.pca is not None:
             features_norm = self.pca.transform(features_norm)
 
@@ -264,8 +273,13 @@ class BrainDelta:
     def _standardize_y(self, y):
         return y - self.y_mean
 
-    def _standardize_x(self, x):
-        return self._normalize(x, mean=self.x_mean, std=self.x_std)[0]
+    def _standardize_x(self, x, conf=None):
+        x_norm = self._normalize(x, mean=self.x_mean, std=self.x_std)[0]
+
+        # Optional deconfounding
+        if conf is not None:
+           x_norm = x_norm - np.dot(conf, self.conf_beta)
+        return x_norm
 
     def _orthogonalize(self, a, b):
         return a - np.dot(b/np.linalg.norm(b), a)
