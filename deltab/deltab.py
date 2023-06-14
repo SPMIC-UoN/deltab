@@ -83,8 +83,10 @@ class BrainDelta:
         # 3a. Optional deconfounding
         self.conf = conf
         if conf is not None:
-           self.conf_beta = np.linalg.pinv(conf)*self.x_norm
+           self.conf_beta = np.dot(np.linalg.pinv(conf), self.x_norm)
            self.x_norm = self.x_norm - np.dot(conf, self.conf_beta)
+        else:
+            self.conf_beta = None
 
         if ev_num or ev_proportion or ev_kg or ev_var:
             # 4. Use SVD to replace X with its top 10–25% vertical eigenvectors
@@ -278,6 +280,8 @@ class BrainDelta:
 
         # Optional deconfounding
         if conf is not None:
+           if self.conf_beta is None:
+               raise RuntimeError("Deconfounding requested in predict() but no deconfounding variables were passed to train()")
            x_norm = x_norm - np.dot(conf, self.conf_beta)
         return x_norm
 
