@@ -91,6 +91,7 @@ def main():
     parser.add_argument('--true-ages-output', help='File to save true ages, if required. Useful if removing subjects with NaNs', default=None)
     parser.add_argument('--overwrite', action="store_true", default=False, help='If specified, overwrite any existing output')
     parser.add_argument('--debug', action="store_true", default=False, help='Enable debug output')
+    parser.add_argument('--version', "-v", action="version", version=__version__)
     args = parser.parse_args()
 
     if len(sys.argv) == 1:
